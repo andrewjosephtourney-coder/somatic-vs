@@ -3,374 +3,399 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Somatic Softening VR</title>
-  <!-- A-Frame Library for WebXR rendering -->
-  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-  
+  <title>Somatic Release Guide</title>
   <style>
-    /* Reset and styling for the landing page overlay */
+    /* Reset and Base Styling */
     body, html {
       margin: 0;
       padding: 0;
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background-color: #05070f;
+      background-color: #03040c; /* Deep Indigo base */
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       color: #e2e8f0;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
-    #landing-page {
+    /* Full-screen particle canvas */
+    canvas {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      z-index: 9999;
+      z-index: 1;
+    }
+
+    /* Screen Overlay Container */
+    .ui-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
       display: flex;
-      flex-direction: column;
       justify-content: center;
       align-items: center;
-      background: radial-gradient(circle at center, #0b0f19 0%, #030408 100%);
-      text-align: center;
-      padding: 20px;
+      padding: 30px;
       box-sizing: border-box;
-      transition: opacity 1s ease;
+      /* Soft vignette gradient to keep focus centered */
+      background: radial-gradient(circle at center, rgba(3, 4, 12, 0.2) 0%, rgba(3, 4, 12, 0.85) 100%);
+      transition: opacity 1.5s ease;
     }
 
-    #landing-page.fade-out {
+    /* Text Cards styling */
+    .card {
+      max-width: 400px;
+      text-align: center;
+      display: none; /* Controlled via State Machine */
       opacity: 0;
-      pointer-events: none;
+      transition: opacity 1.5s ease; /* 1.5s to 2.0s slow visual fades */
     }
 
-    .container {
-      max-width: 450px;
-    }
-
-    h1 {
-      font-size: 1.8rem;
-      font-weight: 400;
-      letter-spacing: 2px;
-      margin-bottom: 10px;
-      color: #a5f3fc;
+    .card.active {
+      display: block;
+      opacity: 1;
     }
 
     p {
-      font-size: 0.95rem;
-      line-height: 1.6;
-      color: #94a3b8;
-      margin-bottom: 30px;
+      font-size: 1.15rem;
+      line-height: 1.75;
+      color: #cbd5e1;
+      margin-bottom: 45px;
+      font-weight: 300;
+      letter-spacing: 0.5px;
     }
 
-    .instructions {
-      background-color: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 8px;
-      padding: 15px;
-      margin-bottom: 30px;
-      font-size: 0.85rem;
-    }
-
-    .instruction-step {
-      display: flex;
-      justify-content: space-between;
-      margin: 8px 0;
-    }
-
-    .accent-blue {
-      color: #38bdf8;
-      font-weight: bold;
-    }
-
-    .accent-cyan {
-      color: #22d3ee;
-      font-weight: bold;
-    }
-
-    #start-btn {
-      background: linear-gradient(135deg, #0284c7 0%, #0891b2 100%);
-      border: none;
-      color: #ffffff;
-      padding: 15px 40px;
-      font-size: 1rem;
-      border-radius: 30px;
+    /* Low-stimulus, elegant buttons */
+    button {
+      background: transparent;
+      border: 1px solid rgba(165, 243, 252, 0.25);
+      color: #a5f3fc;
+      padding: 14px 38px;
+      font-size: 0.9rem;
+      border-radius: 25px;
       cursor: pointer;
-      box-shadow: 0 4px 20px rgba(8, 145, 178, 0.3);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      font-weight: 600;
-      letter-spacing: 1px;
+      font-weight: 400;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      transition: background-color 0.4s ease, border-color 0.4s ease, transform 0.2s ease;
+      outline: none;
+      -webkit-tap-highlight-color: transparent;
     }
 
-    #start-btn:active {
+    button:active {
       transform: scale(0.97);
-      box-shadow: 0 2px 10px rgba(8, 145, 178, 0.2);
+      background-color: rgba(165, 243, 252, 0.05);
+      border-color: rgba(165, 243, 252, 0.5);
     }
 
-    /* Simple on-screen breath text indicator for non-VR debugging/reference */
-    #breath-indicator {
+    /* Faint reset button during the release phase */
+    #reset-btn {
       position: absolute;
-      bottom: 40px;
+      bottom: 30px;
       left: 50%;
       transform: translateX(-50%);
-      z-index: 100;
-      color: rgba(255, 255, 255, 0.4);
-      font-size: 0.9rem;
-      letter-spacing: 3px;
+      z-index: 5;
+      background: transparent;
+      border: none;
+      color: rgba(255, 255, 255, 0.12);
+      font-size: 0.75rem;
+      letter-spacing: 1.5px;
       text-transform: uppercase;
-      pointer-events: none;
       display: none;
+      cursor: pointer;
+      transition: color 0.3s ease;
+    }
+
+    #reset-btn:active {
+      color: rgba(255, 255, 255, 0.4);
     }
   </style>
 </head>
 <body>
 
-  <!-- Landing Page Overlay (Required for iOS/Android permissions) -->
-  <div id="landing-page">
-    <div class="container">
-      <h1>SOMATIC SOFTENING</h1>
-      <p>A minimalist WebXR breathing guide designed to help release physical tension through visual entrainment.</p>
-      
-      <div class="instructions">
-        <div class="instruction-step">
-          <span>Inhale (Condense):</span>
-          <span class="accent-blue">4.0 Seconds</span>
-        </div>
-        <div class="instruction-step">
-          <span>Exhale (Rise & Soften):</span>
-          <span class="accent-cyan">6.0 Seconds</span>
-        </div>
-      </div>
+  <!-- Background Particle Field -->
+  <canvas id="releaseCanvas"></canvas>
 
-      <button id="start-btn">START SESSION</button>
+  <!-- Interactive Somatic Step Flow -->
+  <div id="ui-container" class="ui-overlay">
+    
+    <!-- Step 1: Physical Posture -->
+    <div id="step-1" class="card active">
+      <p>Hold your phone gently below eye level.<br><br>Let your chin tuck slightly, completely relaxing your neck and shoulders.</p>
+      <button onclick="goToStep(2)">I am comfortable</button>
     </div>
+
+    <!-- Step 2: Bypassing the Narrative -->
+    <div id="step-2" class="card">
+      <p>For this moment, no words or stories.<br><br>Just feel what you are feeling now.</p>
+      <button onclick="goToStep(3)">I feel it</button>
+    </div>
+
+    <!-- Step 3: The C.A.P. Prime (Abundance State) -->
+    <div id="step-3" class="card">
+      <p>Can you imagine, for this moment, that you are completely free of any problems or concerns?<br><br>All your goals are met, and your needs are fulfilled.</p>
+      <button onclick="goToStep(4)">I can imagine this</button>
+    </div>
+
+    <!-- Step 4: Locating and Surrendering -->
+    <div id="step-4" class="card">
+      <p>Now, feel the tightness of lack in your stomach...<br><br>and allow it to rise on its own.</p>
+      <button onclick="startRelease()">Allow it to rise</button>
+    </div>
+
   </div>
 
-  <!-- Real-time breathing state overlay (visible outside VR) -->
-  <div id="breath-indicator">Inhale</div>
-
-  <!-- A-Frame VR Scene -->
-  <!-- webxr="requiredFeatures: local-floor" sets up a comfortable baseline floor height -->
-  <a-scene 
-    webxr="requiredFeatures: local-floor" 
-    renderer="antialias: true; colorManagement: true;"
-    vr-mode-ui="enabled: true">
-    
-    <!-- Environment / Skybox -->
-    <a-sky color="#030408"></a-sky>
-
-    <!-- Camera Setup: Positioned slightly back from the coordinate center (0, 0, 0) -->
-    <a-entity id="rig" position="0 1.6 2">
-      <a-camera id="camera" look-controls="pointerLockEnabled: false" wash-out-on-vr></a-camera>
-    </a-entity>
-
-    <!-- Custom Particle System Component Container -->
-    <a-entity id="somatic-particles" position="0 1.2 -1.5" nebula-steam-system></a-entity>
-
-  </a-scene>
+  <!-- Non-intrusive escape/restart button -->
+  <button id="reset-btn" onclick="resetToStart()">Return to start</button>
 
   <script>
     // ------------------------------------------------------------------------
-    // A-FRAME CUSTOM COMPONENT: NEBULA-TO-STEAM PARTICLE ENGINE
+    // RENDER ENGINE & PARTICLE INITIALIZATION
     // ------------------------------------------------------------------------
-    AFRAME.registerComponent('nebula-steam-system', {
-      schema: {
-        particleCount: { type: 'int', default: 500 },
-        inhaleDuration: { type: 'number', default: 4000 }, // in milliseconds
-        exhaleDuration: { type: 'number', default: 6000 }  // in milliseconds
-      },
+    const canvas = document.getElementById('releaseCanvas');
+    const ctx = canvas.getContext('2d');
 
-      init: function () {
-        const data = this.data;
-        this.totalDuration = data.inhaleDuration + data.exhaleDuration;
+    let width = canvas.width = window.innerWidth;
+    let height = canvas.height = window.innerHeight;
 
-        // Create geometry for particles
-        this.geometry = new THREE.BufferGeometry();
-        
-        // Arrays to hold particle initial and real-time values
-        this.positions = new Float32Array(data.particleCount * 3);
-        this.colors = new Float32Array(data.particleCount * 3);
-        
-        // Custom tracking arrays for simulation physics
-        this.particleData = [];
-
-        // Generate initial random particles in a spherical distribution
-        for (let i = 0; i < data.particleCount; i++) {
-          // Generate spherical coordinates
-          const u = Math.random();
-          const v = Math.random();
-          const theta = u * 2.0 * Math.PI;
-          const phi = Math.acos(2.0 * v - 1.0);
-          
-          // Initial base radius (represents the resting state)
-          const radius = 0.2 + Math.random() * 0.3;
-
-          const x = radius * Math.sin(phi) * Math.cos(theta);
-          const y = radius * Math.sin(phi) * Math.sin(theta);
-          const z = radius * Math.cos(phi);
-
-          // Write to BufferGeometry attribute layout
-          this.positions[i * 3] = x;
-          this.positions[i * 3 + 1] = y;
-          this.positions[i * 3 + 2] = z;
-
-          // Store physical properties for dynamic updates in the tick loop
-          this.particleData.push({
-            baseX: x,
-            baseY: y,
-            baseZ: z,
-            angle: Math.random() * Math.PI * 2,
-            rotSpeed: 0.5 + Math.random() * 1.5,
-            driftSpeedX: (Math.random() - 0.5) * 0.4,
-            driftSpeedZ: (Math.random() - 0.5) * 0.4,
-            verticalSpeed: 0.8 + Math.random() * 0.8,
-            randomOffset: Math.random() // de-synchronizes movement slightly
-          });
-
-          // Set initial color (deep blue-purple)
-          this.colors[i * 3] = 0.1;     // R
-          this.colors[i * 3 + 1] = 0.2; // G
-          this.colors[i * 3 + 2] = 0.8; // B
-        }
-
-        this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
-        this.geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
-
-        // Create material with additive blending for a glowing light effect
-        this.material = new THREE.PointsMaterial({
-          size: 0.035,
-          vertexColors: true,
-          transparent: true,
-          opacity: 0.7,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false
-        });
-
-        // Assemble Three.js object and append to scene
-        this.particleSystem = new THREE.Points(this.geometry, this.material);
-        this.el.setObject3D('mesh', this.particleSystem);
-
-        // Keep references to DOM elements for HUD/indicators
-        this.indicatorEl = document.getElementById('breath-indicator');
-      },
-
-      tick: function (time, timeDelta) {
-        if (!timeDelta) return;
-
-        const data = this.data;
-        const positions = this.geometry.attributes.position.array;
-        const colors = this.geometry.attributes.color.array;
-        
-        // Calculate point in the 10-second (10000ms) cycle
-        const cycleTime = time % this.totalDuration;
-        
-        let isInhale = true;
-        let progress = 0; // 0.0 to 1.0 within the active phase
-
-        if (cycleTime < data.inhaleDuration) {
-          // Inhale Phase (0 to 4s)
-          isInhale = true;
-          progress = cycleTime / data.inhaleDuration;
-          if (this.indicatorEl) {
-            this.indicatorEl.textContent = "Inhale (Fill)";
-            this.indicatorEl.style.color = "rgba(56, 189, 248, 0.6)"; // Blue
-          }
-        } else {
-          // Exhale Phase (4s to 10s)
-          isInhale = false;
-          progress = (cycleTime - data.inhaleDuration) / data.exhaleDuration;
-          if (this.indicatorEl) {
-            this.indicatorEl.textContent = "Exhale (Soften)";
-            this.indicatorEl.style.color = "rgba(34, 211, 238, 0.6)"; // Cyan
-          }
-        }
-
-        // Update physics/layout for each particle
-        for (let i = 0; i < data.particleCount; i++) {
-          const p = this.particleData[i];
-          const index = i * 3;
-
-          if (isInhale) {
-            // State A: The Compressed Nebula (Inhale)
-            // Gently pull particles toward the center while slowly spinning them
-            const scale = 1.0 - (progress * 0.4); // shrink down to 60% size
-            const angleDelta = time * 0.001 * p.rotSpeed;
-            
-            // Calculate orbital rotation around Y axis
-            const cosAngle = Math.cos(p.angle + angleDelta);
-            const sinAngle = Math.sin(p.angle + angleDelta);
-            
-            positions[index] = (p.baseX * cosAngle - p.baseZ * sinAngle) * scale;
-            positions[index + 1] = p.baseY * scale; 
-            positions[index + 2] = (p.baseX * sinAngle + p.baseZ * cosAngle) * scale;
-
-            // Deep cool color tone (indigo/dark blue)
-            colors[index] = 0.05 + (0.05 * progress);  // Minimal red
-            colors[index + 1] = 0.1 + (0.1 * progress); // Low green
-            colors[index + 2] = 0.6 + (0.4 * progress); // Dominant blue
-
-            this.material.opacity = 0.6 + (progress * 0.3); // Gradually becomes denser
-
-          } else {
-            // State B: The Rising Steam (Exhale)
-            // Particles rise upward (increasing Y), expand horizontally, and fade away
-            const scale = 0.6 + (progress * 1.5); // expand boundary
-            const angleDelta = time * 0.0003 * p.rotSpeed; // rotation slows down
-            
-            const cosAngle = Math.cos(p.angle + angleDelta);
-            const sinAngle = Math.sin(p.angle + angleDelta);
-
-            // Add drift and vertical lift based on individual speed properties
-            const lift = progress * p.verticalSpeed;
-            const driftX = progress * p.driftSpeedX;
-            const driftZ = progress * p.driftSpeedZ;
-
-            positions[index] = (p.baseX * cosAngle - p.baseZ * sinAngle) * scale + driftX;
-            positions[index + 1] = (p.baseY * scale) + lift; 
-            positions[index + 2] = (p.baseX * sinAngle + p.baseZ * cosAngle) * scale + driftZ;
-
-            // Transition to softer cyan/teal color tones
-            colors[index] = 0.1 + (0.1 * progress);   // Cyan shift
-            colors[index + 1] = 0.2 + (0.5 * progress); // Brightening green-blue
-            colors[index + 2] = 1.0 - (0.2 * progress); // Softer blue
-
-            // Opacity falls toward 0 based on progress and particle offset to disperse organically
-            const fadeThreshold = 1.0 - Math.min(1.0, progress * (1.0 + p.randomOffset * 0.5));
-            this.material.opacity = fadeThreshold * 0.9;
-          }
-        }
-
-        // Notify Three.js renderer of array modifications
-        this.geometry.attributes.position.needsUpdate = true;
-        this.geometry.attributes.color.needsUpdate = true;
-      }
+    window.addEventListener('resize', () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
     });
 
-    // ------------------------------------------------------------------------
-    // INTERACTION AND OVERLAY FLOW LOGIC
-    // ------------------------------------------------------------------------
-    const startButton = document.getElementById('start-btn');
-    const landingPage = document.getElementById('landing-page');
-    const breathIndicator = document.getElementById('breath-indicator');
-    const sceneEl = document.querySelector('a-scene');
+    const ambientParticles = [];
+    const steamParticles = [];
+    const maxAmbientParticles = 90;
+    const maxSteamParticles = 60;
 
-    startButton.addEventListener('click', () => {
-      // 1. Fade out the HTML landing page
-      landingPage.classList.add('fade-out');
+    let currentState = 1;
+    let colorShift = 0;      // 0.0 (Indigo) to 1.0 (Violet). Animated in Step 3.
+    let steamIntensity = 0;  // 0.0 to 1.0. Dynamic build-up during Step 5.
+
+    // 1. Ambient Background Nebula Particles
+    class AmbientParticle {
+      constructor() {
+        this.reset();
+        this.x = Math.random() * width;
+        this.y = Math.random() * height;
+      }
+
+      reset() {
+        this.x = Math.random() * width;
+        this.y = Math.random() * height;
+        this.size = Math.random() * 2.5 + 0.8;
+        this.alpha = Math.random() * 0.18 + 0.04;
+        this.speedX = (Math.random() - 0.5) * 0.15;
+        this.speedY = (Math.random() - 0.5) * 0.12;
+      }
+
+      update() {
+        this.x += this.speedX;
+        this.y += this.speedY;
+
+        if (this.x < 0 || this.x > width || this.y < 0 || this.y > height) {
+          this.reset();
+        }
+      }
+
+      draw() {
+        ctx.beginPath();
+        // Interpolate colors from Cool Indigo/Blue to Soft Violet/Lavender based on colorShift
+        const r = Math.floor(8 + (colorShift * 24));   // 8 -> 32
+        const g = Math.floor(12 + (colorShift * 10));  // 12 -> 22
+        const b = Math.floor(75 - (colorShift * 25));  // 75 -> 50
+        
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${this.alpha})`;
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // 2. Center Rising Steam Particles (The Release)
+    class SteamParticle {
+      constructor() {
+        this.reset();
+        this.y = height + Math.random() * 100; // Stagger initial heights
+      }
+
+      reset() {
+        // Spawns clustered near bottom-center (aligned with physical stomach location)
+        this.x = width / 2 + (Math.random() - 0.5) * (width * 0.18);
+        this.y = height + Math.random() * 30;
+        this.size = Math.random() * 22 + 14;
+        this.alpha = 0;
+        this.maxAlpha = (Math.random() * 0.09 + 0.03) * steamIntensity;
+        this.speedY = -(Math.random() * 1.3 + 0.7); // Continuous rising movement
+        this.driftX = (Math.random() - 0.5) * 0.45; // Gentle horizontal spread
+        this.growth = Math.random() * 0.14 + 0.06;  // Expands as it rises
+      }
+
+      update() {
+        this.y += this.speedY;
+        this.x += this.driftX;
+        this.size += this.growth;
+
+        // Soft fade-in and fade-out based on elevation
+        if (this.y > height * 0.65) {
+          this.alpha += 0.004;
+          const targetAlpha = this.maxAlpha * steamIntensity;
+          if (this.alpha > targetAlpha) this.alpha = targetAlpha;
+        } else if (this.y < height * 0.45) {
+          this.alpha -= 0.002;
+        }
+
+        // Recycle particle once it drifts off screen or fades out completely
+        if (this.y < -50 || this.alpha <= 0) {
+          this.reset();
+        }
+      }
+
+      draw() {
+        if (this.alpha <= 0) return;
+
+        ctx.beginPath();
+        // Create soft radial gradients for a gaseous, textured look
+        const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size);
+        
+        // Glowing Golden-Amber / Warm Peach palette
+        const r = 250;
+        const g = Math.floor(190 + (colorShift * 15)); // Warm gold-peach
+        const b = Math.floor(125 - (colorShift * 15));
+
+        grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${this.alpha})`);
+        grad.addColorStop(0.6, `rgba(${r}, ${g}, ${b}, ${this.alpha * 0.25})`);
+        grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+
+        ctx.fillStyle = grad;
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Populate arrays
+    for (let i = 0; i < maxAmbientParticles; i++) {
+      ambientParticles.push(new AmbientParticle());
+    }
+    for (let i = 0; i < maxSteamParticles; i++) {
+      steamParticles.push(new SteamParticle());
+    }
+
+    // ------------------------------------------------------------------------
+    // MAIN RENDERING LOOP
+    // ------------------------------------------------------------------------
+    function animate() {
+      // Dynamic background color clear (interpolating from Indigo to Violet)
+      const bgR = Math.floor(3 + (colorShift * 12));  // 3 -> 15
+      const bgG = Math.floor(4 + (colorShift * 6));   // 4 -> 10
+      const bgB = Math.floor(12 + (colorShift * 12)); // 12 -> 24
       
-      // 2. Display the flat on-screen breath text indicator (useful when testing without cardboard)
-      breathIndicator.style.display = 'block';
+      ctx.fillStyle = `rgb(${bgR}, ${bgG}, ${bgB})`;
+      ctx.fillRect(0, 0, width, height);
 
-      // 3. Command A-Frame to enter VR (splits screen and initiates device gyroscope tracking)
-      if (sceneEl.hasLoaded) {
-        enterVRMode();
-      } else {
-        sceneEl.addEventListener('loaded', enterVRMode);
+      // Render Ambient Background Nebula
+      for (let i = 0; i < ambientParticles.length; i++) {
+        ambientParticles[i].update();
+        ambientParticles[i].draw();
       }
-    });
 
-    function enterVRMode() {
-      // Attempt to automatically switch mobile device into stereoscopic VR mode
-      sceneEl.enterVR();
+      // Render Central Rising Steam (only active when currentState >= 4)
+      if (currentState >= 4 || steamIntensity > 0) {
+        for (let i = 0; i < steamParticles.length; i++) {
+          steamParticles[i].update();
+          steamParticles[i].draw();
+        }
+      }
+
+      // Smoothly ramp up the steam intensity over 3 seconds during Step 5
+      if (currentState === 5 && steamIntensity < 1) {
+        steamIntensity += 0.006; // Gradual 3-second build-up
+        if (steamIntensity > 1) steamIntensity = 1;
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+
+    // ------------------------------------------------------------------------
+    // FLOW & TRANSITION STATE MACHINE
+    // ------------------------------------------------------------------------
+    function goToStep(nextStep) {
+      const currentCard = document.querySelector(`.card.active`);
+      const nextCard = document.getElementById(`step-${nextStep}`);
+
+      if (currentCard) {
+        currentCard.classList.remove('active');
+      }
+
+      // Transition handling for specific steps
+      if (nextStep === 3) {
+        // Smoothly shift the background nebula color (Indigo to Violet) over 5 seconds
+        let startTime = null;
+        function transitionColor(timestamp) {
+          if (!startTime) startTime = timestamp;
+          const elapsed = timestamp - startTime;
+          colorShift = Math.min(elapsed / 5000, 1.0); // 5000ms duration
+          if (elapsed < 5000) {
+            requestAnimationFrame(transitionColor);
+          }
+        }
+        requestAnimationFrame(transitionColor);
+      }
+
+      // Delayed activation of next card to match the fade out of previous card
+      setTimeout(() => {
+        if (nextCard) {
+          nextCard.classList.add('active');
+          currentState = nextStep;
+        }
+      }, 750); // Matches halfway point of the 1.5s cross-fade
+    }
+
+    function startRelease() {
+      const currentCard = document.querySelector(`.card.active`);
+      const uiOverlay = document.getElementById('ui-container');
+      const resetBtn = document.getElementById('reset-btn');
+
+      if (currentCard) {
+        currentCard.classList.remove('active');
+      }
+
+      // Fade out the entire user interface overlay for pure wordless immersion
+      setTimeout(() => {
+        uiOverlay.style.opacity = '0';
+        uiOverlay.style.pointerEvents = 'none';
+        currentState = 5; // Triggers full steam intensity ramp-up
+
+        // Reveal the quiet reset button at the bottom of the screen
+        setTimeout(() => {
+          resetBtn.style.display = 'block';
+        }, 3000);
+      }, 750);
+    }
+
+    function resetToStart() {
+      const uiOverlay = document.getElementById('ui-container');
+      const resetBtn = document.getElementById('reset-btn');
+      
+      // Reset variables instantly
+      currentState = 1;
+      colorShift = 0;
+      steamIntensity = 0;
+
+      // Reset card activations
+      document.querySelectorAll('.card').forEach(card => card.classList.remove('active'));
+      document.getElementById('step-1').classList.add('active');
+
+      // Bring UI back
+      resetBtn.style.display = 'none';
+      uiOverlay.style.pointerEvents = 'auto';
+      uiOverlay.style.opacity = '1';
     }
   </script>
 </body>
