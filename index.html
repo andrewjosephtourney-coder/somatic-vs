@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Somatic Softening VR</title>
+  <!-- A-Frame Library for WebXR rendering -->
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  
+  <style>
+    /* Reset and styling for the landing page overlay */
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #05070f;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #e2e8f0;
+    }
+
+    #landing-page {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: radial-gradient(circle at center, #0b0f19 0%, #030408 100%);
+      text-align: center;
+      padding: 20px;
+      box-sizing: border-box;
+      transition: opacity 1s ease;
+    }
+
+    #landing-page.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .container {
+      max-width: 450px;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 400;
+      letter-spacing: 2px;
+      margin-bottom: 10px;
+      color: #a5f3fc;
+    }
+
+    p {
+      font-size: 0.95rem;
+      line-height: 1.6;
+      color: #94a3b8;
+      margin-bottom: 30px;
+    }
+
+    .instructions {
+      background-color: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 30px;
+      font-size: 0.85rem;
+    }
+
+    .instruction-step {
+      display: flex;
+      justify-content: space-between;
+      margin: 8px 0;
+    }
+
+    .accent-blue {
+      color: #38bdf8;
+      font-weight: bold;
+    }
+
+    .accent-cyan {
+      color: #22d3ee;
+      font-weight: bold;
+    }
+
+    #start-btn {
+      background: linear-gradient(135deg, #0284c7 0%, #0891b2 100%);
+      border: none;
+      color: #ffffff;
+      padding: 15px 40px;
+      font-size: 1rem;
+      border-radius: 30px;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(8, 145, 178, 0.3);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+
+    #start-btn:active {
+      transform: scale(0.97);
+      box-shadow: 0 2px 10px rgba(8, 145, 178, 0.2);
+    }
+
+    /* Simple on-screen breath text indicator for non-VR debugging/reference */
+    #breath-indicator {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 0.9rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      pointer-events: none;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Landing Page Overlay (Required for iOS/Android permissions) -->
+  <div id="landing-page">
+    <div class="container">
+      <h1>SOMATIC SOFTENING</h1>
+      <p>A minimalist WebXR breathing guide designed to help release physical tension through visual entrainment.</p>
+      
+      <div class="instructions">
+        <div class="instruction-step">
+          <span>Inhale (Condense):</span>
+          <span class="accent-blue">4.0 Seconds</span>
+        </div>
+        <div class="instruction-step">
+          <span>Exhale (Rise & Soften):</span>
+          <span class="accent-cyan">6.0 Seconds</span>
+        </div>
+      </div>
+
+      <button id="start-btn">START SESSION</button>
+    </div>
+  </div>
+
+  <!-- Real-time breathing state overlay (visible outside VR) -->
+  <div id="breath-indicator">Inhale</div>
+
+  <!-- A-Frame VR Scene -->
+  <!-- webxr="requiredFeatures: local-floor" sets up a comfortable baseline floor height -->
+  <a-scene 
+    webxr="requiredFeatures: local-floor" 
+    renderer="antialias: true; colorManagement: true;"
+    vr-mode-ui="enabled: true">
+    
+    <!-- Environment / Skybox -->
+    <a-sky color="#030408"></a-sky>
+
+    <!-- Camera Setup: Positioned slightly back from the coordinate center (0, 0, 0) -->
+    <a-entity id="rig" position="0 1.6 2">
+      <a-camera id="camera" look-controls="pointerLockEnabled: false" wash-out-on-vr></a-camera>
+    </a-entity>
+
+    <!-- Custom Particle System Component Container -->
+    <a-entity id="somatic-particles" position="0 1.2 -1.5" nebula-steam-system></a-entity>
+
+  </a-scene>
+
+  <script>
+    // ------------------------------------------------------------------------
+    // A-FRAME CUSTOM COMPONENT: NEBULA-TO-STEAM PARTICLE ENGINE
+    // ------------------------------------------------------------------------
+    AFRAME.registerComponent('nebula-steam-system', {
+      schema: {
+        particleCount: { type: 'int', default: 500 },
+        inhaleDuration: { type: 'number', default: 4000 }, // in milliseconds
+        exhaleDuration: { type: 'number', default: 6000 }  // in milliseconds
+      },
+
+      init: function () {
+        const data = this.data;
+        this.totalDuration = data.inhaleDuration + data.exhaleDuration;
+
+        // Create geometry for particles
+        this.geometry = new THREE.BufferGeometry();
+        
+        // Arrays to hold particle initial and real-time values
+        this.positions = new Float32Array(data.particleCount * 3);
+        this.colors = new Float32Array(data.particleCount * 3);
+        
+        // Custom tracking arrays for simulation physics
+        this.particleData = [];
+
+        // Generate initial random particles in a spherical distribution
+        for (let i = 0; i < data.particleCount; i++) {
+          // Generate spherical coordinates
+          const u = Math.random();
+          const v = Math.random();
+          const theta = u * 2.0 * Math.PI;
+          const phi = Math.acos(2.0 * v - 1.0);
+          
+          // Initial base radius (represents the resting state)
+          const radius = 0.2 + Math.random() * 0.3;
+
+          const x = radius * Math.sin(phi) * Math.cos(theta);
+          const y = radius * Math.sin(phi) * Math.sin(theta);
+          const z = radius * Math.cos(phi);
+
+          // Write to BufferGeometry attribute layout
+          this.positions[i * 3] = x;
+          this.positions[i * 3 + 1] = y;
+          this.positions[i * 3 + 2] = z;
+
+          // Store physical properties for dynamic updates in the tick loop
+          this.particleData.push({
+            baseX: x,
+            baseY: y,
+            baseZ: z,
+            angle: Math.random() * Math.PI * 2,
+            rotSpeed: 0.5 + Math.random() * 1.5,
+            driftSpeedX: (Math.random() - 0.5) * 0.4,
+            driftSpeedZ: (Math.random() - 0.5) * 0.4,
+            verticalSpeed: 0.8 + Math.random() * 0.8,
+            randomOffset: Math.random() // de-synchronizes movement slightly
+          });
+
+          // Set initial color (deep blue-purple)
+          this.colors[i * 3] = 0.1;     // R
+          this.colors[i * 3 + 1] = 0.2; // G
+          this.colors[i * 3 + 2] = 0.8; // B
+        }
+
+        this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
+        this.geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
+
+        // Create material with additive blending for a glowing light effect
+        this.material = new THREE.PointsMaterial({
+          size: 0.035,
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.7,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false
+        });
+
+        // Assemble Three.js object and append to scene
+        this.particleSystem = new THREE.Points(this.geometry, this.material);
+        this.el.setObject3D('mesh', this.particleSystem);
+
+        // Keep references to DOM elements for HUD/indicators
+        this.indicatorEl = document.getElementById('breath-indicator');
+      },
+
+      tick: function (time, timeDelta) {
+        if (!timeDelta) return;
+
+        const data = this.data;
+        const positions = this.geometry.attributes.position.array;
+        const colors = this.geometry.attributes.color.array;
+        
+        // Calculate point in the 10-second (10000ms) cycle
+        const cycleTime = time % this.totalDuration;
+        
+        let isInhale = true;
+        let progress = 0; // 0.0 to 1.0 within the active phase
+
+        if (cycleTime < data.inhaleDuration) {
+          // Inhale Phase (0 to 4s)
+          isInhale = true;
+          progress = cycleTime / data.inhaleDuration;
+          if (this.indicatorEl) {
+            this.indicatorEl.textContent = "Inhale (Fill)";
+            this.indicatorEl.style.color = "rgba(56, 189, 248, 0.6)"; // Blue
+          }
+        } else {
+          // Exhale Phase (4s to 10s)
+          isInhale = false;
+          progress = (cycleTime - data.inhaleDuration) / data.exhaleDuration;
+          if (this.indicatorEl) {
+            this.indicatorEl.textContent = "Exhale (Soften)";
+            this.indicatorEl.style.color = "rgba(34, 211, 238, 0.6)"; // Cyan
+          }
+        }
+
+        // Update physics/layout for each particle
+        for (let i = 0; i < data.particleCount; i++) {
+          const p = this.particleData[i];
+          const index = i * 3;
+
+          if (isInhale) {
+            // State A: The Compressed Nebula (Inhale)
+            // Gently pull particles toward the center while slowly spinning them
+            const scale = 1.0 - (progress * 0.4); // shrink down to 60% size
+            const angleDelta = time * 0.001 * p.rotSpeed;
+            
+            // Calculate orbital rotation around Y axis
+            const cosAngle = Math.cos(p.angle + angleDelta);
+            const sinAngle = Math.sin(p.angle + angleDelta);
+            
+            positions[index] = (p.baseX * cosAngle - p.baseZ * sinAngle) * scale;
+            positions[index + 1] = p.baseY * scale; 
+            positions[index + 2] = (p.baseX * sinAngle + p.baseZ * cosAngle) * scale;
+
+            // Deep cool color tone (indigo/dark blue)
+            colors[index] = 0.05 + (0.05 * progress);  // Minimal red
+            colors[index + 1] = 0.1 + (0.1 * progress); // Low green
+            colors[index + 2] = 0.6 + (0.4 * progress); // Dominant blue
+
+            this.material.opacity = 0.6 + (progress * 0.3); // Gradually becomes denser
+
+          } else {
+            // State B: The Rising Steam (Exhale)
+            // Particles rise upward (increasing Y), expand horizontally, and fade away
+            const scale = 0.6 + (progress * 1.5); // expand boundary
+            const angleDelta = time * 0.0003 * p.rotSpeed; // rotation slows down
+            
+            const cosAngle = Math.cos(p.angle + angleDelta);
+            const sinAngle = Math.sin(p.angle + angleDelta);
+
+            // Add drift and vertical lift based on individual speed properties
+            const lift = progress * p.verticalSpeed;
+            const driftX = progress * p.driftSpeedX;
+            const driftZ = progress * p.driftSpeedZ;
+
+            positions[index] = (p.baseX * cosAngle - p.baseZ * sinAngle) * scale + driftX;
+            positions[index + 1] = (p.baseY * scale) + lift; 
+            positions[index + 2] = (p.baseX * sinAngle + p.baseZ * cosAngle) * scale + driftZ;
+
+            // Transition to softer cyan/teal color tones
+            colors[index] = 0.1 + (0.1 * progress);   // Cyan shift
+            colors[index + 1] = 0.2 + (0.5 * progress); // Brightening green-blue
+            colors[index + 2] = 1.0 - (0.2 * progress); // Softer blue
+
+            // Opacity falls toward 0 based on progress and particle offset to disperse organically
+            const fadeThreshold = 1.0 - Math.min(1.0, progress * (1.0 + p.randomOffset * 0.5));
+            this.material.opacity = fadeThreshold * 0.9;
+          }
+        }
+
+        // Notify Three.js renderer of array modifications
+        this.geometry.attributes.position.needsUpdate = true;
+        this.geometry.attributes.color.needsUpdate = true;
+      }
+    });
+
+    // ------------------------------------------------------------------------
+    // INTERACTION AND OVERLAY FLOW LOGIC
+    // ------------------------------------------------------------------------
+    const startButton = document.getElementById('start-btn');
+    const landingPage = document.getElementById('landing-page');
+    const breathIndicator = document.getElementById('breath-indicator');
+    const sceneEl = document.querySelector('a-scene');
+
+    startButton.addEventListener('click', () => {
+      // 1. Fade out the HTML landing page
+      landingPage.classList.add('fade-out');
+      
+      // 2. Display the flat on-screen breath text indicator (useful when testing without cardboard)
+      breathIndicator.style.display = 'block';
+
+      // 3. Command A-Frame to enter VR (splits screen and initiates device gyroscope tracking)
+      if (sceneEl.hasLoaded) {
+        enterVRMode();
+      } else {
+        sceneEl.addEventListener('loaded', enterVRMode);
+      }
+    });
+
+    function enterVRMode() {
+      // Attempt to automatically switch mobile device into stereoscopic VR mode
+      sceneEl.enterVR();
+    }
+  </script>
+</body>
+</html>
