@@ -169,9 +169,9 @@
     });
 
     const ambientParticles = [];
-    const steamParticles = [];
+    const sparkleParticles = [];
     const maxAmbientParticles = 90;
-    const maxSteamParticles = 60;
+    const maxSparkleParticles = 180; // Increased count for rich, tiny sparkles
 
     let currentState = 1;
     let colorShift = 0;      // 0.0 (Indigo) to 1.0 (Violet). Animated in Step 3.
@@ -216,41 +216,59 @@
       }
     }
 
-    // 2. Center Rising Steam Particles (The Release)
-    class SteamParticle {
+    // 2. Center Rising Sparkle Particles (The Release)
+    class SparkleParticle {
       constructor() {
         this.reset();
-        this.y = height + Math.random() * 100; // Stagger initial heights
+        this.y = height + Math.random() * height; // Stagger initial heights across screen height
       }
 
       reset() {
         // Spawns clustered near bottom-center (aligned with physical stomach location)
-        this.x = width / 2 + (Math.random() - 0.5) * (width * 0.18);
-        this.y = height + Math.random() * 30;
-        this.size = Math.random() * 22 + 14;
+        this.startX = width / 2 + (Math.random() - 0.5) * (width * 0.12);
+        this.x = this.startX;
+        this.y = height + Math.random() * 40;
+        
+        // Crisp, small glowing points
+        this.size = Math.random() * 3.5 + 1.2; 
         this.alpha = 0;
-        this.maxAlpha = (Math.random() * 0.09 + 0.03) * steamIntensity;
-        this.speedY = -(Math.random() * 1.3 + 0.7); // Continuous rising movement
-        this.driftX = (Math.random() - 0.5) * 0.45; // Gentle horizontal spread
-        this.growth = Math.random() * 0.14 + 0.06;  // Expands as it rises
+        this.maxAlpha = (Math.random() * 0.6 + 0.35) * steamIntensity; // Brighter individual sparks
+        this.speedY = -(Math.random() * 1.6 + 1.0); // Slightly faster rising velocity
+        
+        // Sine wave swaying physics
+        this.wobbleAngle = Math.random() * Math.PI * 2;
+        this.wobbleSpeed = Math.random() * 0.04 + 0.02; // How fast they sway left/right
+        this.wobbleRange = Math.random() * 15 + 8;     // Width of the sway
+        
+        this.twinkleOffset = Math.random() * 100; // Offset to desynchronize twinkling
       }
 
       update() {
         this.y += this.speedY;
-        this.x += this.driftX;
-        this.size += this.growth;
+        
+        // Update horizontal swaying using sine-wave logic
+        this.wobbleAngle += this.wobbleSpeed;
+        this.x = this.startX + Math.sin(this.wobbleAngle) * this.wobbleRange;
 
-        // Soft fade-in and fade-out based on elevation
-        if (this.y > height * 0.65) {
-          this.alpha += 0.004;
+        // Soft fade-in at bottom
+        if (this.y > height * 0.75) {
+          this.alpha += 0.02;
           const targetAlpha = this.maxAlpha * steamIntensity;
           if (this.alpha > targetAlpha) this.alpha = targetAlpha;
-        } else if (this.y < height * 0.45) {
-          this.alpha -= 0.002;
+        } 
+        // Gradual fade-out near top
+        else if (this.y < height * 0.4) {
+          this.alpha -= 0.008;
+        }
+
+        // Micro-twinkling effect based on a sine oscillation
+        if (this.alpha > 0) {
+          const twinkle = Math.sin((Date.now() + this.twinkleOffset) * 0.01) * 0.08;
+          this.alpha = Math.max(0.05, Math.min(this.maxAlpha, this.alpha + twinkle));
         }
 
         // Recycle particle once it drifts off screen or fades out completely
-        if (this.y < -50 || this.alpha <= 0) {
+        if (this.y < -10 || this.alpha <= 0) {
           this.reset();
         }
       }
@@ -259,21 +277,22 @@
         if (this.alpha <= 0) return;
 
         ctx.beginPath();
-        // Create soft radial gradients for a gaseous, textured look
-        const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size);
         
-        // Glowing Golden-Amber / Warm Peach palette
-        const r = 250;
-        const g = Math.floor(190 + (colorShift * 15)); // Warm gold-peach
-        const b = Math.floor(125 - (colorShift * 15));
+        // Warm golden-amber with a subtle bright core
+        const r = 255;
+        const g = Math.floor(195 + (colorShift * 15)); // Soft peach-amber
+        const b = Math.floor(110 - (colorShift * 15));
 
-        grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${this.alpha})`);
-        grad.addColorStop(0.6, `rgba(${r}, ${g}, ${b}, ${this.alpha * 0.25})`);
-        grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+        // Draw a small outer glow
+        ctx.shadowBlur = this.size * 1.5;
+        ctx.shadowColor = `rgba(${r}, ${g}, ${b}, ${this.alpha * 0.5})`;
 
-        ctx.fillStyle = grad;
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${this.alpha})`;
         ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
         ctx.fill();
+
+        // Reset shadow so it doesn't affect subsequent drawing and slow down performance
+        ctx.shadowBlur = 0;
       }
     }
 
@@ -281,8 +300,8 @@
     for (let i = 0; i < maxAmbientParticles; i++) {
       ambientParticles.push(new AmbientParticle());
     }
-    for (let i = 0; i < maxSteamParticles; i++) {
-      steamParticles.push(new SteamParticle());
+    for (let i = 0; i < maxSparkleParticles; i++) {
+      sparkleParticles.push(new SparkleParticle());
     }
 
     // ------------------------------------------------------------------------
@@ -303,11 +322,11 @@
         ambientParticles[i].draw();
       }
 
-      // Render Central Rising Steam (only active when currentState >= 4)
+      // Render Central Rising Sparkles (only active when currentState >= 4)
       if (currentState >= 4 || steamIntensity > 0) {
-        for (let i = 0; i < steamParticles.length; i++) {
-          steamParticles[i].update();
-          steamParticles[i].draw();
+        for (let i = 0; i < sparkleParticles.length; i++) {
+          sparkleParticles[i].update();
+          sparkleParticles[i].draw();
         }
       }
 
